@@ -75,4 +75,4 @@ Single route `/`:
 
 ## PRD Reference
 
-The full product requirements document is at `promps/1_origin.md`.
+The full product requirements document is at `prds/1_origin.md`.
