@@ -5,50 +5,83 @@ import { createSessionToken, setSessionCookie } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { proof, merkle_root, nullifier_hash } = body;
+  const { protocol_version, responses } = body;
 
-  if (!proof || !merkle_root || !nullifier_hash) {
-    return NextResponse.json({ error: "Missing proof fields" }, { status: 400 });
+  if (!responses || !Array.isArray(responses) || responses.length === 0) {
+    return NextResponse.json(
+      { error: "Missing proof responses" },
+      { status: 400 }
+    );
   }
 
-  // Verify proof server-side with action "enter"
-  const result = await verifyWorldIDProof({
-    proof,
-    merkle_root,
-    nullifier_hash,
-    action: "enter",
-  });
+  const response = responses[0];
 
-  if (!result.success) {
-    return NextResponse.json({ error: "Verification failed" }, { status: 401 });
-  }
-
-  // Enforce orb verification server-side
-  if (result.verification_level !== "orb") {
+  // Enforce orb credential
+  if (response.identifier !== "orb") {
     return NextResponse.json(
       { error: "Orb verification required" },
       { status: 403 }
     );
   }
 
-  // Upsert user by nullifierHash
+  if (protocol_version === "3.0") {
+    // V3 legacy proof — verify via Cloud API
+    const result = await verifyWorldIDProof({
+      proof: response.proof,
+      merkle_root: response.merkle_root,
+      nullifier_hash: response.nullifier,
+      action: "enter",
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Verification failed" },
+        { status: 401 }
+      );
+    }
+
+    if (result.verification_level !== "orb") {
+      return NextResponse.json(
+        { error: "Orb verification required" },
+        { status: 403 }
+      );
+    }
+
+    const user = await prisma.user.upsert({
+      where: { nullifierHash: response.nullifier },
+      update: {
+        verificationLevel: "orb",
+        lastVerifiedAt: new Date(),
+      },
+      create: {
+        nullifierHash: response.nullifier,
+        verificationLevel: "orb",
+        lastVerifiedAt: new Date(),
+      },
+    });
+
+    const token = await createSessionToken(user.id);
+    const res = NextResponse.json({ ok: true });
+    setSessionCookie(res, token);
+    return res;
+  }
+
+  // V4 proof
   const user = await prisma.user.upsert({
-    where: { nullifierHash: result.nullifier_hash! },
+    where: { nullifierHash: response.nullifier },
     update: {
-      verificationLevel: result.verification_level,
+      verificationLevel: "orb",
       lastVerifiedAt: new Date(),
     },
     create: {
-      nullifierHash: result.nullifier_hash!,
-      verificationLevel: result.verification_level,
+      nullifierHash: response.nullifier,
+      verificationLevel: "orb",
       lastVerifiedAt: new Date(),
     },
   });
 
-  // Create session and set cookie
   const token = await createSessionToken(user.id);
-  const response = NextResponse.json({ ok: true });
-  setSessionCookie(response, token);
-
-  return response;
+  const res = NextResponse.json({ ok: true });
+  setSessionCookie(res, token);
+  return res;
 }

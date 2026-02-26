@@ -1,7 +1,8 @@
 "use client";
 
-import { IDKitWidget, ISuccessResult, VerificationLevel } from "@worldcoin/idkit";
-import { useState } from "react";
+import { IDKitRequestWidget, orbLegacy } from "@worldcoin/idkit";
+import type { IDKitResult, IDKitErrorCodes, RpContext } from "@worldcoin/idkit";
+import { useState, useCallback } from "react";
 import { StatusResponse } from "@/types";
 
 interface ComposerProps {
@@ -13,6 +14,26 @@ export default function Composer({ status, onPostSuccess }: ComposerProps) {
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [widgetOpen, setWidgetOpen] = useState(false);
+  const [rpContext, setRpContext] = useState<RpContext | null>(null);
+
+  const action = `daily-post:${status.dayUtc}`;
+
+  const fetchRpContext = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rp-context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      setRpContext(data.rp_context);
+      return data.rp_context;
+    } catch {
+      setError("Failed to initialize verification");
+      return null;
+    }
+  }, [action]);
 
   if (!status.canPostToday) {
     return (
@@ -24,7 +45,15 @@ export default function Composer({ status, onPostSuccess }: ComposerProps) {
     );
   }
 
-  const handleVerify = async (result: ISuccessResult) => {
+  const handleOpen = async () => {
+    setError(null);
+    const ctx = rpContext || (await fetchRpContext());
+    if (ctx) {
+      setWidgetOpen(true);
+    }
+  };
+
+  const handleSuccess = async (result: IDKitResult) => {
     setPosting(true);
     setError(null);
 
@@ -34,28 +63,27 @@ export default function Composer({ status, onPostSuccess }: ComposerProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: content.trim(),
-          proof: result.proof,
-          merkle_root: result.merkle_root,
-          nullifier_hash: result.nullifier_hash,
-          verification_level: result.verification_level,
+          proof_result: result,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to post");
+        setError(data.error || "Failed to post");
+      } else {
+        setContent("");
+        onPostSuccess();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to post");
-      throw err;
+    } catch {
+      setError("Failed to post");
     } finally {
       setPosting(false);
     }
   };
 
-  const onSuccess = () => {
-    setContent("");
-    onPostSuccess();
+  const handleError = (errorCode: IDKitErrorCodes) => {
+    setError(`Verification failed: ${errorCode}`);
+    setRpContext(null);
   };
 
   const trimmedLength = content.trim().length;
@@ -78,25 +106,30 @@ export default function Composer({ status, onPostSuccess }: ComposerProps) {
           {trimmedLength}/200
         </span>
         {error && <span className="text-sm text-red-500">{error}</span>}
-        <IDKitWidget
-          app_id={process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}`}
-          action={`daily-post:${status.dayUtc}`}
-          verification_level={VerificationLevel.Orb}
-          handleVerify={handleVerify}
-          onSuccess={onSuccess}
-          onError={() => setError("Verification failed")}
+        <button
+          onClick={handleOpen}
+          disabled={!canSubmit || posting}
+          className="bg-black text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {({ open }: { open: () => void }) => (
-            <button
-              onClick={open}
-              disabled={!canSubmit || posting}
-              className="bg-black text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {posting ? "Posting..." : "Verify & Post"}
-            </button>
-          )}
-        </IDKitWidget>
+          {posting ? "Posting..." : "Verify & Post"}
+        </button>
       </div>
+      {rpContext && (
+        <IDKitRequestWidget
+          app_id={process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}`}
+          action={action}
+          rp_context={rpContext}
+          allow_legacy_proofs={true}
+          preset={orbLegacy()}
+          open={widgetOpen}
+          onOpenChange={(open) => {
+            setWidgetOpen(open);
+            if (!open) setRpContext(null);
+          }}
+          onSuccess={handleSuccess}
+          onError={handleError}
+        />
+      )}
     </div>
   );
 }

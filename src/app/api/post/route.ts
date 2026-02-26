@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { content, proof, merkle_root, nullifier_hash } = body;
+  const { content, proof_result } = body;
 
   // Validate content server-side
   const trimmed = typeof content === "string" ? content.trim() : "";
@@ -26,23 +26,50 @@ export async function POST(request: NextRequest) {
   const today = getTodayUtc();
   const expectedAction = `daily-post:${today}`;
 
-  // Verify proof
-  const result = await verifyWorldIDProof({
-    proof,
-    merkle_root,
-    nullifier_hash,
-    action: expectedAction,
-  });
-
-  if (!result.success) {
-    return NextResponse.json({ error: "Verification failed" }, { status: 401 });
+  // Validate proof result
+  if (
+    !proof_result ||
+    !proof_result.responses ||
+    proof_result.responses.length === 0
+  ) {
+    return NextResponse.json(
+      { error: "Missing proof" },
+      { status: 400 }
+    );
   }
 
-  if (result.verification_level !== "orb") {
+  const response = proof_result.responses[0];
+
+  // Enforce orb credential
+  if (response.identifier !== "orb") {
     return NextResponse.json(
       { error: "Orb verification required" },
       { status: 403 }
     );
+  }
+
+  // For v3 legacy proofs, verify via Cloud API
+  if (proof_result.protocol_version === "3.0") {
+    const result = await verifyWorldIDProof({
+      proof: response.proof,
+      merkle_root: response.merkle_root,
+      nullifier_hash: response.nullifier,
+      action: expectedAction,
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Verification failed" },
+        { status: 401 }
+      );
+    }
+
+    if (result.verification_level !== "orb") {
+      return NextResponse.json(
+        { error: "Orb verification required" },
+        { status: 403 }
+      );
+    }
   }
 
   // Insert post — unique constraint is the final backstop
