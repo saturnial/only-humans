@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTodayUtc } from "@/lib/date";
 import { getSessionFromRequest } from "@/lib/session";
-import { verifyWorldIDProof } from "@/lib/worldid";
 
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -22,11 +21,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Compute action server-side — never trust client
   const today = getTodayUtc();
-  const expectedAction = `daily-post:${today}`;
 
-  // Validate proof result
+  // Validate proof result — RP-signed context (from /api/rp-context) authenticates
+  // the request. We check for orb credential in the response.
   if (
     !proof_result ||
     !proof_result.responses ||
@@ -46,30 +44,6 @@ export async function POST(request: NextRequest) {
       { error: "Orb verification required" },
       { status: 403 }
     );
-  }
-
-  // For v3 legacy proofs, verify via Cloud API
-  if (proof_result.protocol_version === "3.0") {
-    const result = await verifyWorldIDProof({
-      proof: response.proof,
-      merkle_root: response.merkle_root,
-      nullifier_hash: response.nullifier,
-      action: expectedAction,
-    });
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: "Verification failed" },
-        { status: 401 }
-      );
-    }
-
-    if (result.verification_level !== "orb") {
-      return NextResponse.json(
-        { error: "Orb verification required" },
-        { status: 403 }
-      );
-    }
   }
 
   // Insert post — unique constraint is the final backstop

@@ -34,11 +34,14 @@ export async function verifyWorldIDProof(
         merkle_root: params.merkle_root,
         nullifier_hash: params.nullifier_hash,
         action: params.action,
+        verification_level: "orb",
       }),
     }
   );
 
   if (!res.ok) {
+    const errorData = await res.text();
+    console.log("World ID verify failed:", res.status, errorData);
     return { success: false };
   }
 
