@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Daily Proof is a minimal social web app where only Orb-verified World ID humans can read or write. Each person can post one message per UTC day (max 200 characters). All posts appear in a global reverse-chronological feed. This is a technical demo prioritizing correctness and strong server-side enforcement.
+OnlyHumans is a minimal social web app where only Orb-verified World ID humans can read or write. Each person can post one message per UTC day (max 200 characters). All posts appear in a global reverse-chronological feed. This is a technical demo prioritizing correctness and strong server-side enforcement.
 
 ## Tech Stack
 

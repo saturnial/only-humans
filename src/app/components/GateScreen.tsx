@@ -62,9 +62,9 @@ export default function GateScreen() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <h1 className="text-3xl font-bold mb-4">Daily Proof</h1>
+      <h1 className="text-3xl font-bold mb-4">OnlyHumans</h1>
       <p className="text-gray-600 mb-8 max-w-md">
-        Verify with World ID (Orb Required) to enter Daily Proof.
+        Verify with World ID (Orb Required) to enter OnlyHumans.
       </p>
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <button

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Daily Proof",
+  title: "OnlyHumans",
   description: "One post per day. Verified humans only.",
 };
 
