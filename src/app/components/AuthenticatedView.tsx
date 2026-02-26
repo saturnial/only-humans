@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { StatusResponse, FeedPost } from "@/types";
 import Composer from "./Composer";
 import Feed from "./Feed";
@@ -14,8 +15,14 @@ export default function AuthenticatedView({
   initialStatus,
   initialPosts,
 }: AuthenticatedViewProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<StatusResponse>(initialStatus);
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.refresh();
+  };
 
   const refresh = async () => {
     const [statusRes, feedRes] = await Promise.all([
@@ -33,8 +40,16 @@ export default function AuthenticatedView({
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Daily Proof</h1>
+        <button
+          onClick={handleLogout}
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          Log out
+        </button>
+      </div>
       <div>
-        <h1 className="text-2xl font-bold mb-4">Daily Proof</h1>
         <Composer status={status} onPostSuccess={refresh} />
       </div>
       <div>
